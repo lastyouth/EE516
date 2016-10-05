@@ -1,0 +1,1 @@
+cmd_/home/sbh/Desktop/hw1/hw1_driver.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/sbh/Desktop/hw1/hw1_driver.ko /home/sbh/Desktop/hw1/hw1_driver.o /home/sbh/Desktop/hw1/hw1_driver.mod.o
