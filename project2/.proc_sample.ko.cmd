@@ -1,0 +1,1 @@
+cmd_/home/sbh/Desktop/EE516/project2/proc_sample.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/sbh/Desktop/EE516/project2/proc_sample.ko /home/sbh/Desktop/EE516/project2/proc_sample.o /home/sbh/Desktop/EE516/project2/proc_sample.mod.o

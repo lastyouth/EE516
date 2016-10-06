@@ -1,0 +1,1 @@
+cmd_/home/sbh/Desktop/EE516/project2/procmon.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/sbh/Desktop/EE516/project2/procmon.ko /home/sbh/Desktop/EE516/project2/procmon.o /home/sbh/Desktop/EE516/project2/procmon.mod.o

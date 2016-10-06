@@ -1,4 +1,4 @@
-MODULES = proc_sample
+MODULES = procmon
 KERNEL_SOURCE = /lib/modules/$(shell uname -r)/build
 ARCH = x86_64
 CURDIR = $(shell pwd)
@@ -12,7 +12,7 @@ BUILD = $(MODULES:%=%.ko)
 all:: $(BUILD)
 	
 clean:
-	rm -f $(BUILD) *.o *.ko *.mod.c *.mod.o *~ .*.cmdModule.symvers
+	rm -f $(BUILD) *.o *.ko *.mod.c *.mod.o *~ .*.cmdModule.symvers *.symvers *.order
 	rm -rf .tmp_versions
 $(MODULES:%=%.ko):*c
 	$(MAKE) CROSS_COMPILE=$(CROSS_COMPILE) ARCH=$(ARCH) -C $(KERNEL_SOURCE) SUBDIRS=$(CURDIR) M=$(CURDIR) modules
