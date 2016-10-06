@@ -115,7 +115,7 @@ static int procmon_proc_show(struct seq_file *m, void *v)
 	
 	struct task_struct* p_thread_ptr; // for 'for_each_thread', it points each thread of process
 	
-	seq_printf(m, "======= Contents ====== \n");
+	seq_printf(m, "======= Process Monitoring Manager for EE516 made by BoHun Seo ====== \n");
 	seq_printf(m, "PID\t\tProcessName\tVIRT(KB)\tRSS Mem(KB)\tDiskRead(KB)\tDiskWrite(KB)\tTotal I/O(KB)\n"); 
 
 	// use kzalloc for initalizing zero in allocated memory.
