@@ -1,4 +1,4 @@
-cmd_/home/sbh/Desktop/EE516/project2/procmon.o := gcc -Wp,-MD,/home/sbh/Desktop/EE516/project2/.procmon.o.d  -nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/4.8/include  -I./arch/x86/include -Iarch/x86/include/generated/uapi -Iarch/x86/include/generated  -Iinclude -I./arch/x86/include/uapi -Iarch/x86/include/generated/uapi -I./include/uapi -Iinclude/generated/uapi -include ./include/linux/kconfig.h -Iubuntu/include  -D__KERNEL__ -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -Wno-format-security -std=gnu89 -m64 -mno-80387 -mno-fp-ret-in-387 -mtune=generic -mno-red-zone -mcmodel=kernel -funit-at-a-time -maccumulate-outgoing-args -DCONFIG_X86_X32_ABI -DCONFIG_AS_CFI=1 -DCONFIG_AS_CFI_SIGNAL_FRAME=1 -DCONFIG_AS_CFI_SECTIONS=1 -DCONFIG_AS_FXSAVEQ=1 -DCONFIG_AS_CRC32=1 -DCONFIG_AS_AVX=1 -DCONFIG_AS_AVX2=1 -pipe -Wno-sign-compare -fno-asynchronous-unwind-tables -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx -fno-delete-null-pointer-checks -O2 --param=allow-store-data-races=0 -Wframe-larger-than=1024 -fstack-protector -Wno-unused-but-set-variable -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-var-tracking-assignments -pg -mfentry -DCC_USING_FENTRY -Wdeclaration-after-statement -Wno-pointer-sign -fno-strict-overflow -fconserve-stack -Werror=implicit-int -Werror=strict-prototypes -DCC_HAVE_ASM_GOTO  -DMODULE  -D"KBUILD_STR(s)=\#s" -D"KBUILD_BASENAME=KBUILD_STR(procmon)"  -D"KBUILD_MODNAME=KBUILD_STR(procmon)" -c -o /home/sbh/Desktop/EE516/project2/.tmp_procmon.o /home/sbh/Desktop/EE516/project2/procmon.c
+cmd_/home/sbh/Desktop/EE516/project2/procmon.o := gcc -Wp,-MD,/home/sbh/Desktop/EE516/project2/.procmon.o.d  -nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/4.8/include -I./arch/x86/include -Iarch/x86/include/generated  -Iinclude -I./arch/x86/include/uapi -Iarch/x86/include/generated/uapi -I./include/uapi -Iinclude/generated/uapi -include ./include/linux/kconfig.h -D__KERNEL__ -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -Wno-format-security -std=gnu89 -m64 -mno-80387 -mno-fp-ret-in-387 -mtune=generic -mno-red-zone -mcmodel=kernel -funit-at-a-time -maccumulate-outgoing-args -DCONFIG_X86_X32_ABI -DCONFIG_AS_CFI=1 -DCONFIG_AS_CFI_SIGNAL_FRAME=1 -DCONFIG_AS_CFI_SECTIONS=1 -DCONFIG_AS_FXSAVEQ=1 -DCONFIG_AS_CRC32=1 -DCONFIG_AS_AVX=1 -DCONFIG_AS_AVX2=1 -pipe -Wno-sign-compare -fno-asynchronous-unwind-tables -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx -fno-delete-null-pointer-checks -O2 --param=allow-store-data-races=0 -Wframe-larger-than=1024 -fstack-protector -Wno-unused-but-set-variable -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-var-tracking-assignments -g -gdwarf-4 -pg -mfentry -DCC_USING_FENTRY -Wdeclaration-after-statement -Wno-pointer-sign -fno-strict-overflow -fconserve-stack -Werror=implicit-int -Werror=strict-prototypes -DCC_HAVE_ASM_GOTO  -DMODULE  -D"KBUILD_STR(s)=\#s" -D"KBUILD_BASENAME=KBUILD_STR(procmon)"  -D"KBUILD_MODNAME=KBUILD_STR(procmon)" -c -o /home/sbh/Desktop/EE516/project2/.tmp_procmon.o /home/sbh/Desktop/EE516/project2/procmon.c
 
 source_/home/sbh/Desktop/EE516/project2/procmon.o := /home/sbh/Desktop/EE516/project2/procmon.c
 
@@ -128,7 +128,6 @@ deps_/home/sbh/Desktop/EE516/project2/procmon.o := \
     $(wildcard include/config/x86/p6/nop.h) \
     $(wildcard include/config/matom.h) \
   arch/x86/include/asm/disabled-features.h \
-    $(wildcard include/config/x86/intel/mpx.h) \
   arch/x86/include/asm/rmwcc.h \
   arch/x86/include/asm/barrier.h \
     $(wildcard include/config/x86/ppro/fence.h) \
@@ -191,7 +190,6 @@ deps_/home/sbh/Desktop/EE516/project2/procmon.o := \
   arch/x86/include/asm/page_64.h \
     $(wildcard include/config/debug/virtual.h) \
     $(wildcard include/config/flatmem.h) \
-    $(wildcard include/config/x86/vsyscall/emulation.h) \
   include/linux/range.h \
   include/asm-generic/memory_model.h \
     $(wildcard include/config/discontigmem.h) \
@@ -345,7 +343,6 @@ deps_/home/sbh/Desktop/EE516/project2/procmon.o := \
     $(wildcard include/config/compaction.h) \
     $(wildcard include/config/have/memblock/node/map.h) \
     $(wildcard include/config/flat/node/mem/map.h) \
-    $(wildcard include/config/page/extension.h) \
     $(wildcard include/config/no/bootmem.h) \
     $(wildcard include/config/have/memory/present.h) \
     $(wildcard include/config/have/memoryless/nodes.h) \
@@ -384,8 +381,9 @@ deps_/home/sbh/Desktop/EE516/project2/procmon.o := \
   include/linux/srcu.h \
   include/linux/rcupdate.h \
     $(wildcard include/config/tree/rcu.h) \
-    $(wildcard include/config/preempt/rcu.h) \
+    $(wildcard include/config/tree/preempt/rcu.h) \
     $(wildcard include/config/rcu/trace.h) \
+    $(wildcard include/config/preempt/rcu.h) \
     $(wildcard include/config/rcu/stall/common.h) \
     $(wildcard include/config/rcu/user/qs.h) \
     $(wildcard include/config/rcu/nocb/cpu.h) \
@@ -455,6 +453,7 @@ deps_/home/sbh/Desktop/EE516/project2/procmon.o := \
   include/linux/pm.h \
     $(wildcard include/config/vt/console/sleep.h) \
     $(wildcard include/config/pm.h) \
+    $(wildcard include/config/pm/runtime.h) \
     $(wildcard include/config/pm/clk.h) \
     $(wildcard include/config/pm/generic/domains.h) \
   arch/x86/include/asm/fixmap.h \
@@ -537,10 +536,15 @@ deps_/home/sbh/Desktop/EE516/project2/procmon.o := \
     $(wildcard include/config/have/cmpxchg/double.h) \
     $(wildcard include/config/have/aligned/struct/page.h) \
     $(wildcard include/config/transparent/hugepage.h) \
+    $(wildcard include/config/want/page/debug/flags.h) \
     $(wildcard include/config/aio.h) \
     $(wildcard include/config/mmu/notifier.h) \
   include/linux/auxvec.h \
   include/uapi/linux/auxvec.h \
+  include/linux/page-debug-flags.h \
+    $(wildcard include/config/page/poisoning.h) \
+    $(wildcard include/config/page/guard.h) \
+    $(wildcard include/config/page/debug/something/else.h) \
   include/linux/uprobes.h \
     $(wildcard include/config/uprobes.h) \
   arch/x86/include/asm/uprobes.h \
@@ -604,11 +608,6 @@ deps_/home/sbh/Desktop/EE516/project2/procmon.o := \
   arch/x86/include/uapi/asm/resource.h \
   include/asm-generic/resource.h \
   include/uapi/asm-generic/resource.h \
-  include/linux/page_ext.h \
-    $(wildcard include/config/page/owner.h) \
-  include/linux/stacktrace.h \
-    $(wildcard include/config/stacktrace.h) \
-    $(wildcard include/config/user/stacktrace/support.h) \
   arch/x86/include/asm/pgtable.h \
     $(wildcard include/config/have/arch/soft/dirty.h) \
   arch/x86/include/asm/pgtable_64.h \
@@ -654,7 +653,6 @@ deps_/home/sbh/Desktop/EE516/project2/procmon.o := \
     $(wildcard include/config/cgroup/sched.h) \
     $(wildcard include/config/blk/dev/io/trace.h) \
     $(wildcard include/config/compat/brk.h) \
-    $(wildcard include/config/memcg/kmem.h) \
     $(wildcard include/config/virt/cpu/accounting/gen.h) \
     $(wildcard include/config/sysvipc.h) \
     $(wildcard include/config/auditsyscall.h) \
@@ -744,9 +742,9 @@ deps_/home/sbh/Desktop/EE516/project2/procmon.o := \
   include/linux/fs.h \
     $(wildcard include/config/fs/posix/acl.h) \
     $(wildcard include/config/ima.h) \
+    $(wildcard include/config/quota.h) \
     $(wildcard include/config/fsnotify.h) \
     $(wildcard include/config/file/locking.h) \
-    $(wildcard include/config/quota.h) \
     $(wildcard include/config/fs/xip.h) \
   include/linux/kdev_t.h \
   include/uapi/linux/kdev_t.h \
@@ -783,6 +781,7 @@ deps_/home/sbh/Desktop/EE516/project2/procmon.o := \
   include/linux/slab.h \
     $(wildcard include/config/slab/debug.h) \
     $(wildcard include/config/failslab.h) \
+    $(wildcard include/config/memcg/kmem.h) \
     $(wildcard include/config/slab.h) \
     $(wildcard include/config/slub.h) \
     $(wildcard include/config/slob.h) \
