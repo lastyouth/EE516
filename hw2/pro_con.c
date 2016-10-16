@@ -136,8 +136,8 @@ int main(void)
 	 * thread creating routine
 	 * each thread creates with parameter which represents its identity by numbering*/
 	pthread_create(&threads[0], NULL, producer,(void*)(&p[0]));
-	pthread_create(&threads[2], NULL, producer,(void*)(&p[1]));
-	pthread_create(&threads[1], NULL, consumer, (void*)(&p[2]));
+	pthread_create(&threads[1], NULL, producer,(void*)(&p[1]));
+	pthread_create(&threads[2], NULL, consumer, (void*)(&p[2]));
 	pthread_create(&threads[3], NULL, consumer, (void*)(&p[3]));
 	
 	/*
