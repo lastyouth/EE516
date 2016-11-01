@@ -68,7 +68,7 @@ void *producer(void *arg)
 		 * 7. sleep 200 ms */
 		item = produce_item();
 		printf("PRODUCER %d (%d) : produce item : %d\n",*id,i,item);
-		sem_wait(&empty);
+		sem_wait(&empty); 
 		sem_wait(&mutex);
 		insert_item(item);
 		sem_post(&mutex);
