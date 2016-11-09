@@ -5,14 +5,14 @@
 #include <time.h>
 #include <unistd.h>
 
-#define MAX_PHILOSOPHER_NUM 5
+#define MAX_PHILOSOPHER_NUM 16
 #define THINKING 0
 #define HUNGRY 1
 #define EATING 2
 
 // semaphores
 sem_t mutex; // use as mutex
-sem_t sem[MAX_PHILOSOPHER_NUM]; //semaphore for each philosopher
+sem_t sem[MAX_PHILOSOPHER_NUM+1]; //semaphore for each philosopher
 
 // state
 int state[MAX_PHILOSOPHER_NUM];
@@ -99,6 +99,7 @@ void test(int i)
 		// then acquire the forks.
 		state[i] = EATING;
 		sem_post(&sem[i]);
+		printf("PHILOSOPHER %d : acquire the forks\n",i);
 	}
 }
 
@@ -132,6 +133,7 @@ void put_forks(int i)
 	test(getLeft(i));
 	test(getRight(i));
 	sem_post(&mutex);
+	printf("PHILOSOPHER %d : put down the forks\n",i);
 }
 
 void *philosopher(void *args)
@@ -165,7 +167,7 @@ int main()
 	}
 	for(i=0;i<MAX_PHILOSOPHER_NUM;i++)
 	{
-		res=sem_init(&sem[i],0,1); // operate as mutex for each philosopher
+		res=sem_init(&sem[i],0,0); // operate as mutex for each philosopher
 		
 		if(res!=0){
 			perror("sem_init_failed.\n");

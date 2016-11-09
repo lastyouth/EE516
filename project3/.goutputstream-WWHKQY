@@ -1,0 +1,54 @@
+#include <unistd.h>
+#include <stdio.h>
+#include <pthread.h>
+#include "task3_mysemaphore.h"
+
+#define TARGET_SEMAPHORE 3
+#define MAX_THREAD	8
+
+int test = 0;
+
+void lockfunction(int priority)
+{
+	mysema_down(TARGET_SEMAPHORE);
+	int v = test;
+	v++;
+	test = v;
+	mysema_up(TARGET_SEMAPHORE);
+}
+
+void *threadfunction(void *args)
+{
+	int i;
+	
+	for(i=0;i<1000000;i++)
+	{
+		lockfunction(0);
+	}
+}
+
+int main()
+{
+	int i,res;
+	pthread_t thread[MAX_THREAD];
+	
+	res = mysema_init(TARGET_SEMAPHORE,1,FIFO);
+	
+	printf("mysema_init result : %d\n",res);
+	
+	for(i=0;i<MAX_THREAD;i++)
+	{
+		pthread_create(&thread[i],NULL,threadfunction,NULL);
+	}
+	
+	for(i=0;i<MAX_THREAD;i++)
+	{
+		pthread_join(thread[i],NULL);
+	}
+	res = mysema_release(TARGET_SEMAPHORE);
+	
+	printf("mysema_release : %d\n",res);
+	
+	printf("Final value : %d\n",test);
+	return 0;
+}

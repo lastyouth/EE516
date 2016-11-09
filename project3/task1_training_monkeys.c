@@ -30,7 +30,7 @@
 
 // training purpose
 
-#define TARGET_TRAINING		30
+#define TARGET_TRAINING		300
 
 char *ballname[4]={"RED","GREEN","BLUE","YELLOW"};
 
@@ -47,7 +47,7 @@ struct monkey{
 	int requireBalls[2]; // monkey's prefered balls, in order.
 	int state; // monkey's state
 	int timeforThinking; // monkey's time for thinking
-	int usedbowl;
+	int usedbowl; // bowl for eating banana
 };
 
 sem_t maxMonkeys; // for spawn monkeys
