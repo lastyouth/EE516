@@ -1,4 +1,5 @@
-
+/*
+ * wrapper header for calling mysema_ functions */
 #define SEMA_INIT		323 
 #define SEMA_DOWN		324
 #define SEMA_USERPRIO	325
