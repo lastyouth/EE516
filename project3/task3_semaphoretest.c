@@ -10,7 +10,7 @@
 /* if define ATOMIC_OPERATION and rebuild, this program will perform about the atomic operation test.
 	otherwise, it will perform the priority test
 */
-#define ATOMIC_OPERATION
+//#define ATOMIC_OPERATION
 
 
 int shared_variable = 0;
