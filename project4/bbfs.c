@@ -38,12 +38,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <time.h>
 
 #ifdef HAVE_SYS_XATTR_H
 #include <sys/xattr.h>
 #endif
 
 #include "log.h"
+#include "list.h"
 
 // sbh added
 int encryptEnabled = 0;
@@ -52,6 +54,205 @@ unsigned int forShift;
 int cachePolicy; // 0: No cache, 1:random eviction, 2:LRU eviction
 
 char configFilePath[BUFSIZ];
+
+// file buffer
+
+#define MAX_CHUNK_SIZE 	4096
+#define MAX_LIST_SIZE 	1280 // 4096 * 1280 = 5 Mbytes
+#define PERFECT_HIT		0x101
+#define PARTIAL_HIT		0x102
+#define PARTIAL_MISS	0x103
+#define PERFECT_MISS	0x104
+
+struct filebuffer
+{
+	struct list_head listptr;
+	int from;
+	int to;
+	int activated;
+	int dirty;
+	int fd;
+	char buf[MAX_CHUNK_SIZE];
+};
+
+struct hitinfo
+{
+	int type;
+	int valid[2];
+	struct filebuffer *firstpart;
+	struct filebuffer *secondpart;
+};
+
+static int bufferCount = 0;
+
+// for sort
+static int startOffsetCmp(void *priv, struct list_head *_a, struct list_head *_b)
+{
+	struct filebuffer *a = container_of(_a, struct filebuffer, listptr);
+	struct filebuffer *b = container_of(_b, struct filebuffer, listptr);
+		
+	int fromA, fromB;
+
+	fromA = a->from;
+	fromB = b->from;
+	
+	// ascending order
+	if (fromA < fromB)
+		return -1;
+	else if (fromA > fromB)
+		return 1;
+	return 0;
+}
+
+static struct list_head headptr;
+
+struct hitinfo bufferHitCheck(int offset, int reqSize, int fd)
+{
+	struct filebuffer *pos;
+	int currentfrom,currentto;
+	int targetfrom, targetto;
+	int firstpart = 0, secondpart = 0;
+	struct hitinfo ret;
+	
+	ret.type = PERFECT_MISS;
+	ret.valid[0] = ret.valid[1] = 0;
+	
+	
+	
+	targetfrom = offset;
+	targetto = offset+reqSize;
+	
+	
+	list_for_each_entry(pos,&headptr,listptr)
+	{
+		currentfrom = pos->from;
+		currentto = pos->to;
+		
+		if(pos->fd == fd && currentfrom == targetfrom)
+		{
+			// perfect hit
+			firstpart = secondpart = 1;
+			ret.type = PERFECT_HIT;
+			
+			ret.valid[0] = 1;
+			ret.firstpart = pos;
+			
+			break;
+		}
+		if(pos->fd == fd && currentfrom < targetfrom && targetfrom < currentto)
+		{
+			// partial hit candidate
+			firstpart = 1;
+			
+			ret.valid[0] = 1;
+			ret.firstpart = pos;
+		}
+		if(pos->fd == fd && currentfrom < targetto && targetto < currentto)
+		{
+			secondpart = 1;
+			
+			ret.valid[1] = 1;
+			ret.secondpart = pos;
+		}
+	}
+	if(ret.type == PERFECT_HIT)
+	{
+		return ret;
+	}
+	if(ret.valid[0] == 1 && ret.valid[1] == 1)
+	{
+		ret.type = PARTIAL_HIT;
+		return ret;
+	}
+	if(ret.valid[0] == 1 || ret.valid[1] == 1)
+	{
+		ret.type = PARTIAL_MISS;
+		return ret;
+	}
+	return ret;
+}
+
+void releaseFileBuffer(struct fuse_file_info *fi)
+{
+	while(!list_empty(&headptr))
+	{
+		struct filebuffer *pos;
+		
+		pos = list_first_entry(&headptr,struct filebuffer,listptr);
+		
+		if(pos->dirty == 1)
+		{
+			// should be written
+			pwrite(fi->fh,pos->buf,MAX_CHUNK_SIZE,pos->from);
+		}
+		
+		list_del(&(pos->listptr));
+		free(pos);
+	}
+}
+
+void printFileBuffer()
+{
+	struct filebuffer *pos;
+	int i = 0;
+	
+	list_for_each_entry(pos,&headptr,listptr)
+	{
+		log_msg("printFileBuffer : %dth buffer : from %d to %d\n",i++,pos->from,pos->to);
+	}
+}
+
+void addFileBuffer(char *buf, int from, int to, int fd)
+{
+	struct filebuffer temp;
+	int targetEviction;
+	if(bufferCount >= MAX_LIST_SIZE)
+	{
+		// evict something
+		loadPolicyFromFile();
+		
+		if(cachePolicy == 1)
+		{
+			struct filebuffer *pos;
+			// Random eviction
+			srand((unsigned int)time(0));
+			targetEviction = 1+rand()%bufferCount;
+			
+			list_for_each_entry(pos,&headptr,listptr)
+			{
+				targetEviction--;
+				if(targetEviction == 0)
+				{
+					list_del(&(pos->listptr));
+					if(pos->dirty == 1)
+					{
+						pwrite(pos->fd,pos->buf,MAX_CHUNK_SIZE,pos->from);
+					}
+					free(pos);
+					break;
+				}
+			}
+		}
+		else
+		{
+			// LRU
+		}
+	}
+	
+	// just insert
+	struct filebuffer *buffer = (struct filebuffer*)calloc(1,sizeof(struct filebuffer));
+	
+	buffer->dirty = 0;
+	buffer->from = from;
+	buffer->to = to;
+	buffer->fd = fd;
+	
+	memcpy(buffer->buf,buf,MAX_CHUNK_SIZE);
+	
+	list_add_tail(&(buffer->listptr),&headptr);
+	bufferCount++;
+	//printFileBuffer();
+}
 
 //sbh
 void loadPolicyFromFile()
@@ -100,40 +301,24 @@ void loadPolicyFromFile()
 	}
 	log_msg("Load from ee516.conf : Addition : %d, Shift : %d, CachePolicy : %d\n",forAddition,forShift,cachePolicy);
 }
-
-int getPositionForShift(int direction, int current,int shift, int size)
-{
-	int modres = shift % size;
-	int tmp;
-	
-	if(direction > 0)
-	{
-		return (current+modres)%size;
-	}
-	else
-	{
-		tmp = current - modres;
-		
-		if(tmp < 0)
-		{
-			return size + tmp;
-		}
-		return tmp;
-	}
-}
-
 unsigned char applyBitshift(unsigned char target, int direction, int shift, int size)
 {
 	int modres = shift % size;
-	unsigned char ret;
+	unsigned char ret = 0;
 	
+	if(target == 0)
+	{
+		return ret;
+	}
+	
+	//log_msg("applyBitshift, shift : %d , modres : %d, size : %d\n",shift,modres,size);
 	if(direction > 0)
 	{
-		ret = (target >> shift) | ( target << (sizeof(target)*CHAR_BIT - shift));
+		ret = (target >> modres) | ( target << (sizeof(target)*CHAR_BIT - modres));
 	}
 	else
 	{
-		ret = (target << shift) | ( target >> (sizeof(target)*CHAR_BIT - shift));
+		ret = (target << modres) | ( target >> (sizeof(target)*CHAR_BIT - modres));
 	}
 	return ret;
 }
@@ -503,15 +688,162 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
     // no need to get fpath on this one, since I work from fi->fh not the path
     log_fi(fi);
     
+    if(cachePolicy != 0 && size == MAX_CHUNK_SIZE)
+    {
+		// can use cache
+		struct hitinfo info;
+		
+		info = bufferHitCheck((int)offset,size,fi->fh);
+		
+		if(info.type == PERFECT_HIT)
+		{
+			log_msg("bb_read_cache : PERFECT_HIT -> from %d to %d\n",info.firstpart->from,info.firstpart->to);
+			memcpy(buf,info.firstpart->buf,size);
+			retstat = size;
+			goto cache_read_process_done;
+		}
+		else if(info.type == PARTIAL_HIT)
+		{
+			char* totalbuf = (char*)calloc(2*size,sizeof(char));
+			int refinedOffset = offset % MAX_CHUNK_SIZE;
+			
+			log_msg("bb_read_cache : PARTIAL_HIT -> from %d to %d\n",refinedOffset,refinedOffset+size);
+			
+			// concatenation.
+			sprintf(totalbuf,"%s%s",info.firstpart->buf,info.secondpart->buf);
+			
+			
+			
+			memcpy(buf,totalbuf+refinedOffset,size);
+			
+			free(totalbuf);
+			
+			retstat = size;
+			goto cache_read_process_done;			
+		}else if(info.type == PARTIAL_MISS)
+		{
+			int start;
+			char *tempbuf,*totalbuf;
+			int refinedOffset = offset % MAX_CHUNK_SIZE;
+			
+			if(info.valid[0] == 1)
+			{
+				log_msg("bb_read_cache : PARTIAL_MISS(Firstpart is OK) -> from %d to %d\n",info.firstpart->from,info.firstpart->to);
+				// we need second one
+				start = info.firstpart->to;
+				tempbuf = (char*)calloc(size,sizeof(char));
+				
+				pread(fi->fh,tempbuf,size,start);
+				
+				// add second part to Buffer
+				addFileBuffer(tempbuf,start,start+size,fi->fh);
+				
+				totalbuf = (char*)calloc(2*size,sizeof(char));
+				
+				sprintf(totalbuf,"%s%s",info.firstpart->buf,tempbuf);
+				
+				memcpy(buf,totalbuf+refinedOffset,size);
+				
+				free(tempbuf);
+				free(totalbuf);
+				
+				retstat = size;
+				
+				goto cache_read_process_done;
+			}
+			
+			if(info.valid[1] == 1)
+			{
+				log_msg("bb_read_cache : PARTIAL_MISS(Secondpart is OK) -> from %d to %d\n",info.secondpart->from,info.secondpart->to);
+				// we need first one
+				start = info.secondpart->to - MAX_CHUNK_SIZE;
+				
+				tempbuf = (char*)calloc(size,sizeof(char));
+				
+				pread(fi->fh,tempbuf,size,start);
+				
+				// add first part to Buffer
+				addFileBuffer(tempbuf,start,start+size,fi->fh);
+				
+				totalbuf = (char*)calloc(2*size,sizeof(char));
+				
+				sprintf(totalbuf,"%s%s",tempbuf,info.secondpart->buf);
+				
+				memcpy(buf,totalbuf+refinedOffset,size);
+				
+				free(tempbuf);
+				free(totalbuf);
+				
+				retstat = size;
+				
+				goto cache_read_process_done;
+			}
+			
+			
+		}else if(info.type == PERFECT_MISS)
+		{
+			int p,start;
+			char *tempbuf,*totalbuf;
+			int refinedOffset = offset % MAX_CHUNK_SIZE;
+			
+			p = offset % MAX_CHUNK_SIZE;
+			
+			if(p == 0)
+			{
+				// perfect align!
+				start = offset;
+				log_msg("bb_read_cache : PERFECT_MISS(perfect align) -> from %d to %d\n",start,start+size);
+				tempbuf = (char*)calloc(size,sizeof(char));
+				pread(fi->fh,tempbuf,size,start);
+				
+				// add to buffer
+				addFileBuffer(tempbuf,start,start+size,fi->fh);
+				
+				memcpy(buf,tempbuf,size);
+				
+				free(tempbuf);
+				
+				retstat = size;
+				
+				goto cache_read_process_done;
+			}
+			else
+			{
+				// we need two chunks
+				start = offset - p;
+				refinedOffset = offset % MAX_CHUNK_SIZE;
+				
+				log_msg("bb_read_cache : PERFECT_MISS(partial align) -> from %d to %d\n",refinedOffset,refinedOffset+size);
+				
+				tempbuf = (char*)calloc(2*size,sizeof(char));
+				
+				pread(fi->fh,tempbuf,size*2,start);
+				
+				// add to buffers
+				addFileBuffer(tempbuf,start,start+size,fi->fh);
+				addFileBuffer(tempbuf+size,start+size,start+size+size,fi->fh);								
+				
+				memcpy(buf,tempbuf+refinedOffset,size);
+				
+				free(tempbuf);
+				
+				retstat = size;
+				
+				goto cache_read_process_done;
+			}
+		}
+	}
+    
     retstat = pread(fi->fh, buf, size, offset);
     
     // sbh encryption    
+cache_read_process_done:
     len = retstat;
     loadPolicyFromFile();
     
     for(i=0;i<len;i++)
 	{
-		buf[i] = applyBitshift(buf[i],-1,forShift,len);
+		buf[i] = applyBitshift(buf[i],-1,forShift,CHAR_BIT);
 	}
     for(i=0;i<len;i++)
     {
@@ -560,12 +892,176 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset,
 	}
 	for(i=0;i<len;i++)
 	{
-		intermediateBuf[i] = applyBitshift(intermediateBuf[i],1,forShift,len);
+		intermediateBuf[i] = applyBitshift(intermediateBuf[i],1,forShift,CHAR_BIT);
+	}
+	
+	if(cachePolicy != 0 && size == MAX_CHUNK_SIZE)
+	{
+		// cache activation
+		struct hitinfo info;
+		
+		info = bufferHitCheck((int)offset,size,fi->fh);
+		
+		if(info.type == PERFECT_HIT)
+		{
+			log_msg("bb_write_cache : PERFECT_HIT -> from %d to %d\n",info.firstpart->from,info.firstpart->to);
+			memcpy(info.firstpart->buf,intermediateBuf,size);
+			info.firstpart->dirty = 1;
+			
+			retstat = size;
+			goto cache_write_process_done;
+		}
+		else if(info.type == PARTIAL_HIT)
+		{
+			char* totalbuf = (char*)calloc(2*size,sizeof(char));
+			int refinedOffset = offset % MAX_CHUNK_SIZE;
+			
+			log_msg("bb_write_cache : PARTIAL_HIT -> from %d to %d\n",refinedOffset,refinedOffset+size);
+			
+			// concatenation.
+			sprintf(totalbuf,"%s%s",info.firstpart->buf,info.secondpart->buf);
+			
+			memcpy(totalbuf+refinedOffset,intermediateBuf,size);
+			
+			memcpy(info.firstpart->buf,totalbuf,size);
+			memcpy(info.secondpart->buf,totalbuf+MAX_CHUNK_SIZE,size);
+			
+			info.firstpart->dirty = 1;
+			info.secondpart->dirty = 1;
+			
+			free(totalbuf);
+			
+			retstat = size;
+			goto cache_write_process_done;
+						
+		}else if(info.type == PARTIAL_MISS)
+		{
+			int start;
+			char *tempbuf,*totalbuf;
+			int refinedOffset = offset % MAX_CHUNK_SIZE;
+			
+			if(info.valid[0] == 1)
+			{
+				// we need second one
+				start = info.firstpart->to;
+				tempbuf = (char*)calloc(size,sizeof(char));
+				
+				log_msg("bb_write_cache : PARTIAL_MISS(Firstpart is OK) -> from %d to %d\n",info.firstpart->from,info.firstpart->to);
+				
+				pread(fi->fh,tempbuf,size,start);
+				
+				totalbuf = (char*)calloc(2*size,sizeof(char));
+				
+				sprintf(totalbuf,"%s%s",info.firstpart->buf,tempbuf);
+				
+				memcpy(totalbuf+refinedOffset,intermediateBuf,size);
+				
+				// firstpart write
+				memcpy(info.firstpart->buf,totalbuf,size);
+				info.firstpart->dirty = 1;
+				
+				// secondpart insert
+				addFileBuffer(totalbuf+size,start+size,start+size+size,fi->fh);
+				
+				free(tempbuf);
+				free(totalbuf);
+				
+				retstat = size;
+				goto cache_write_process_done;
+			}
+			
+			if(info.valid[1] == 1)
+			{
+				// we need first one
+				start = info.secondpart->from - MAX_CHUNK_SIZE;
+				
+				tempbuf = (char*)calloc(size,sizeof(char));
+				
+				log_msg("bb_write_cache : PARTIAL_MISS(Second is OK) -> from %d to %d\n",info.secondpart->from,info.secondpart->to);
+				
+				pread(fi->fh,tempbuf,size,start);
+				
+				
+				totalbuf = (char*)calloc(2*size,sizeof(char));
+				
+				sprintf(totalbuf,"%s%s",tempbuf,info.secondpart->buf);
+				
+				memcpy(totalbuf+refinedOffset,intermediateBuf,size);
+				
+				// secondpart write
+				
+				memcpy(info.secondpart->buf,totalbuf+size,size);
+				
+				// firstpart insert
+				addFileBuffer(totalbuf,start,start+size,fi->fh);
+				
+				free(tempbuf);
+				free(totalbuf);
+				
+				retstat = size;
+				goto cache_write_process_done;
+			}
+			
+			
+		}else if(info.type == PERFECT_MISS)
+		{
+			int p,start;
+			char *tempbuf,*totalbuf;
+			int refinedOffset = offset % MAX_CHUNK_SIZE;
+			
+			p = offset % MAX_CHUNK_SIZE;
+			
+			if(p == 0)
+			{
+				// perfect align!
+				start = offset;
+				log_msg("bb_write_cache : PERFECT_MISS(perfect align) -> from %d to %d\n",start,start+size);
+				tempbuf = (char*)calloc(size,sizeof(char));
+				pread(fi->fh,tempbuf,size,start);
+				
+				memcpy(tempbuf,intermediateBuf,size);
+				
+				// add it to buffer
+				addFileBuffer(tempbuf,start,start+size,fi->fh);
+				
+				// insert it
+				
+				free(tempbuf);
+				
+				retstat = size;
+				goto cache_write_process_done;
+			}
+			else
+			{
+				// we need two chunks
+				start = offset - p;
+				refinedOffset = offset % MAX_CHUNK_SIZE;
+				
+				log_msg("bb_write_cache : PERFECT_MISS(partial align) -> from %d to %d\n",refinedOffset,refinedOffset+size);
+				tempbuf = (char*)calloc(2*size,sizeof(char));
+				
+				pread(fi->fh,tempbuf,size*2,start);
+				
+				memcpy(tempbuf+refinedOffset,intermediateBuf,size);
+				
+				// insert two
+				addFileBuffer(tempbuf,start,start+size,fi->fh);
+				addFileBuffer(tempbuf+size,start+size,start+size+size,fi->fh);
+				
+				free(tempbuf);
+				
+				retstat = size;
+				goto cache_write_process_done;
+			}
+		}
+		
 	}
 	
     retstat = pwrite(fi->fh, intermediateBuf, size, offset);
     
     free(intermediateBuf);
+
+cache_write_process_done:
     
     if (retstat < 0)
 	retstat = bb_error("bb_write pwrite");
@@ -650,6 +1146,8 @@ int bb_flush(const char *path, struct fuse_file_info *fi)
 int bb_release(const char *path, struct fuse_file_info *fi)
 {
     int retstat = 0;
+    //sbh
+    releaseFileBuffer(fi);
     
     log_msg("\nbb_release(path=\"%s\", fi=0x%08x)\n",
 	  path, fi);
@@ -1153,6 +1651,8 @@ int main(int argc, char *argv[])
     
         
     //loadPolicyFromFile();
+    // sbh: initialize the bufferlist
+    INIT_LIST_HEAD(&headptr);
     getcwd(configFilePath,BUFSIZ);
     sprintf(configFilePath,"%s/%s",configFilePath,"ee516.conf");
     printf("%s\n",configFilePath);
