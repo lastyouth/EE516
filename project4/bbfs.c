@@ -48,7 +48,7 @@
 #include "list.h"
 
 // sbh added
-int encryptEnabled = 0;
+int encryptEnabled = 0; // which is determined by ee516.conf file
 unsigned int forAddition;
 unsigned int forShift;
 int cachePolicy; // 0: No cache, 1:random eviction, 2:LRU eviction
@@ -57,62 +57,47 @@ char configFilePath[BUFSIZ];
 
 // file buffer
 
-#define MAX_CHUNK_SIZE 	4096
-#define MAX_LIST_SIZE 	1280 // 4096 * 1280 = 5 Mbytes
+#define MAX_CHUNK_SIZE 	4096	// each buffer node has 4KB chunk size.
+#define MAX_LIST_SIZE 	1280    // 4096 * 1280 = 5 Mbytes
+// cache access would have 4 different results
 #define PERFECT_HIT		0x101
 #define PARTIAL_HIT		0x102
 #define PARTIAL_MISS	0x103
 #define PERFECT_MISS	0x104
 
+// represent filebuffer node
 struct filebuffer
 {
-	struct list_head listptr;
-	int from;
-	int to;
-	int activated;
-	int dirty;
-	int fd;
-	char buf[MAX_CHUNK_SIZE];
+	struct list_head listptr; // used for linkedlist
+	int from; // start offset
+	int to; // end offset
+	int dirty; // dirty flag
+	int fd; // related file pointer
+	char buf[MAX_CHUNK_SIZE]; // chunk
 };
 
+// return value from bufferHitCheck function which designates the cache access result
 struct hitinfo
 {
-	int type;
-	int valid[2];
-	struct filebuffer *firstpart;
-	struct filebuffer *secondpart;
+	int type; // access result type : one of predefined value(i.e. PERFECT_HIT, PARTIAL_HIT, PARTIAL_MISS, PERFECT_MISS)
+	int valid[2]; // valid array which indicates validation of firstpart or secondpart.
+	struct filebuffer *firstpart; // cached data
+	struct filebuffer *secondpart; // cached data
 };
 
-static int bufferCount = 0;
+static int bufferCount = 0; // filebuffer size
 
-// for sort
-static int startOffsetCmp(void *priv, struct list_head *_a, struct list_head *_b)
-{
-	struct filebuffer *a = container_of(_a, struct filebuffer, listptr);
-	struct filebuffer *b = container_of(_b, struct filebuffer, listptr);
-		
-	int fromA, fromB;
-
-	fromA = a->from;
-	fromB = b->from;
-	
-	// ascending order
-	if (fromA < fromB)
-		return -1;
-	else if (fromA > fromB)
-		return 1;
-	return 0;
-}
-
-static struct list_head headptr;
+static struct list_head headptr; // filebuffer head pointer
 
 struct hitinfo bufferHitCheck(int offset, int reqSize, int fd)
 {
-	struct filebuffer *pos;
-	int currentfrom,currentto;
-	int targetfrom, targetto;
-	int firstpart = 0, secondpart = 0;
-	struct hitinfo ret;
+	/*
+	 * this function searches the filebuffer list and 
+	 * determines cache hit or miss of current read or write request*/
+	struct filebuffer *pos; // each filebuffer
+	int currentfrom,currentto; // each filebuffer's offset
+	int targetfrom, targetto; // offset of request
+	struct hitinfo ret; // return value
 	
 	ret.type = PERFECT_MISS;
 	ret.valid[0] = ret.valid[1] = 0;
@@ -121,6 +106,7 @@ struct hitinfo bufferHitCheck(int offset, int reqSize, int fd)
 	
 	targetfrom = offset;
 	targetto = offset+reqSize;
+	log_msg("bufferHitCheck start : from %d to %d\n",targetfrom,targetto);
 	
 	
 	list_for_each_entry(pos,&headptr,listptr)
@@ -131,7 +117,7 @@ struct hitinfo bufferHitCheck(int offset, int reqSize, int fd)
 		if(pos->fd == fd && currentfrom == targetfrom)
 		{
 			// perfect hit
-			firstpart = secondpart = 1;
+			// it is possible because there is an assumption that each request size is 4Kb
 			ret.type = PERFECT_HIT;
 			
 			ret.valid[0] = 1;
@@ -142,57 +128,105 @@ struct hitinfo bufferHitCheck(int offset, int reqSize, int fd)
 		if(pos->fd == fd && currentfrom < targetfrom && targetfrom < currentto)
 		{
 			// partial hit candidate
-			firstpart = 1;
 			
 			ret.valid[0] = 1;
 			ret.firstpart = pos;
 		}
 		if(pos->fd == fd && currentfrom < targetto && targetto < currentto)
 		{
-			secondpart = 1;
-			
+
 			ret.valid[1] = 1;
 			ret.secondpart = pos;
 		}
 	}
 	if(ret.type == PERFECT_HIT)
 	{
-		return ret;
+		list_move(&(ret.firstpart->listptr),&headptr); // for LRU, move target filebuffer to front
+		goto search_done;
 	}
 	if(ret.valid[0] == 1 && ret.valid[1] == 1)
 	{
-		ret.type = PARTIAL_HIT;
-		return ret;
+		ret.type = PARTIAL_HIT; // this is that write or read request is spread between two filebuffers.
+		list_move(&(ret.secondpart->listptr),&headptr); // for LRU
+		list_move(&(ret.firstpart->listptr),&headptr);
+		goto search_done;
 	}
 	if(ret.valid[0] == 1 || ret.valid[1] == 1)
 	{
+		// this is routine for PARTIAL_MISS
+		// which means that incomplete data of request is existed in filebuffer
+		if(ret.valid[0] == 1)
+		{
+			list_move(&(ret.firstpart->listptr),&headptr); // for LRU
+		}
+		else
+		{
+			list_move(&(ret.secondpart->listptr),&headptr); // for LRU
+		}
 		ret.type = PARTIAL_MISS;
-		return ret;
+		goto search_done;
 	}
+search_done:
 	return ret;
 }
 
-void releaseFileBuffer(struct fuse_file_info *fi)
+void removeAllBufferCache()
 {
+	/*
+	 * this function is used for removing all filebuffer list
+	 * only for debugging*/
 	while(!list_empty(&headptr))
 	{
 		struct filebuffer *pos;
 		
 		pos = list_first_entry(&headptr,struct filebuffer,listptr);
 		
+		list_del(&(pos->listptr));
+		free(pos);
+	}
+	bufferCount = 0;
+	INIT_LIST_HEAD(&headptr);
+}
+
+void releaseFileBuffer(struct fuse_file_info *fi)
+{
+	/*
+	 * if opened file is start to close, 
+	 * release the file buffer list*/
+	while(!list_empty(&headptr))
+	{
+		struct filebuffer *pos;
+		
+		// for each filebuffer node
+		pos = list_first_entry(&headptr,struct filebuffer,listptr);
+		
+		if(pos->dirty == 1)
+		{
+			// should be written if dirty.
+			pwrite(fi->fh,pos->buf,MAX_CHUNK_SIZE,pos->from);
+		}
+		
+		// remove and free target node
+		list_del(&(pos->listptr));
+		free(pos);
+	}
+	bufferCount = 0;
+	INIT_LIST_HEAD(&headptr);
+	/*struct filebuffer *pos;
+	
+	list_for_each_entry(pos,&headptr,listptr)
+	{
 		if(pos->dirty == 1)
 		{
 			// should be written
 			pwrite(fi->fh,pos->buf,MAX_CHUNK_SIZE,pos->from);
 		}
-		
-		list_del(&(pos->listptr));
-		free(pos);
-	}
+	}*/
 }
 
 void printFileBuffer()
 {
+	// only used for debugging
 	struct filebuffer *pos;
 	int i = 0;
 	
@@ -206,6 +240,8 @@ void addFileBuffer(char *buf, int from, int to, int fd)
 {
 	struct filebuffer temp;
 	int targetEviction;
+	/*
+	 * if PARTIAL_MISS or PERFECT_MISS is occured, target request data should be added to filebuffer*/
 	if(bufferCount >= MAX_LIST_SIZE)
 	{
 		// evict something
@@ -223,6 +259,8 @@ void addFileBuffer(char *buf, int from, int to, int fd)
 				targetEviction--;
 				if(targetEviction == 0)
 				{
+					//delete target filebuffer node.
+					// if dirty flag is set, write it to disk
 					list_del(&(pos->listptr));
 					if(pos->dirty == 1)
 					{
@@ -236,20 +274,33 @@ void addFileBuffer(char *buf, int from, int to, int fd)
 		else
 		{
 			// LRU
+			// remove last entry, it would be operated as LRU, because filebuffer node is moved to front when referred.
+			struct filebuffer *pos;
+			pos = list_last_entry(&headptr,struct filebuffer, listptr);
+			list_del(&(pos->listptr));
+			if(pos->dirty == 1)
+			{
+				pwrite(pos->fd,pos->buf,MAX_CHUNK_SIZE,pos->from);
+			}
+			free(pos);
 		}
+		bufferCount--;
 	}
 	
 	// just insert
 	struct filebuffer *buffer = (struct filebuffer*)calloc(1,sizeof(struct filebuffer));
 	
+	// initialize
 	buffer->dirty = 0;
 	buffer->from = from;
 	buffer->to = to;
 	buffer->fd = fd;
 	
+	// data copy
 	memcpy(buffer->buf,buf,MAX_CHUNK_SIZE);
 	
-	list_add_tail(&(buffer->listptr),&headptr);
+	// add
+	list_add(&(buffer->listptr),&headptr);
 	bufferCount++;
 	//printFileBuffer();
 }
@@ -306,18 +357,15 @@ unsigned char applyBitshift(unsigned char target, int direction, int shift, int 
 	int modres = shift % size;
 	unsigned char ret = 0;
 	
-	if(target == 0)
-	{
-		return ret;
-	}
-	
 	//log_msg("applyBitshift, shift : %d , modres : %d, size : %d\n",shift,modres,size);
 	if(direction > 0)
 	{
+		// right rotate shift, ignoring sign bit
 		ret = (target >> modres) | ( target << (sizeof(target)*CHAR_BIT - modres));
 	}
 	else
 	{
+		// left rotate shift, ignoring sign bit
 		ret = (target << modres) | ( target >> (sizeof(target)*CHAR_BIT - modres));
 	}
 	return ret;
@@ -473,6 +521,8 @@ int bb_unlink(const char *path)
 {
     int retstat = 0;
     char fpath[PATH_MAX];
+    
+    //removeAllBufferCache();
     
     log_msg("bb_unlink(path=\"%s\")\n",
 	    path);
@@ -688,15 +738,17 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
     // no need to get fpath on this one, since I work from fi->fh not the path
     log_fi(fi);
     
+    loadPolicyFromFile(); // read policy from ee516.conf
     if(cachePolicy != 0 && size == MAX_CHUNK_SIZE)
     {
 		// can use cache
 		struct hitinfo info;
 		
-		info = bufferHitCheck((int)offset,size,fi->fh);
+		info = bufferHitCheck((int)offset,size,fi->fh); // determine cache access reseult
 		
 		if(info.type == PERFECT_HIT)
 		{
+			// perfect hit
 			log_msg("bb_read_cache : PERFECT_HIT -> from %d to %d\n",info.firstpart->from,info.firstpart->to);
 			memcpy(buf,info.firstpart->buf,size);
 			retstat = size;
@@ -709,11 +761,10 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 			
 			log_msg("bb_read_cache : PARTIAL_HIT -> from %d to %d\n",refinedOffset,refinedOffset+size);
 			
-			// concatenation.
+			// concatenate two part
 			sprintf(totalbuf,"%s%s",info.firstpart->buf,info.secondpart->buf);
 			
-			
-			
+			// then copy proper offset to buf
 			memcpy(buf,totalbuf+refinedOffset,size);
 			
 			free(totalbuf);
@@ -726,6 +777,8 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 			char *tempbuf,*totalbuf;
 			int refinedOffset = offset % MAX_CHUNK_SIZE;
 			
+			// partial miss, we should read proper data for caching
+			
 			if(info.valid[0] == 1)
 			{
 				log_msg("bb_read_cache : PARTIAL_MISS(Firstpart is OK) -> from %d to %d\n",info.firstpart->from,info.firstpart->to);
@@ -733,6 +786,7 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 				start = info.firstpart->to;
 				tempbuf = (char*)calloc(size,sizeof(char));
 				
+				// read first part from disk
 				pread(fi->fh,tempbuf,size,start);
 				
 				// add second part to Buffer
@@ -742,6 +796,7 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 				
 				sprintf(totalbuf,"%s%s",info.firstpart->buf,tempbuf);
 				
+				// copy proper data to buf
 				memcpy(buf,totalbuf+refinedOffset,size);
 				
 				free(tempbuf);
@@ -760,6 +815,7 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 				
 				tempbuf = (char*)calloc(size,sizeof(char));
 				
+				// read second part from disk
 				pread(fi->fh,tempbuf,size,start);
 				
 				// add first part to Buffer
@@ -769,6 +825,7 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 				
 				sprintf(totalbuf,"%s%s",tempbuf,info.secondpart->buf);
 				
+				// copy proper data to buf
 				memcpy(buf,totalbuf+refinedOffset,size);
 				
 				free(tempbuf);
@@ -782,6 +839,7 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 			
 		}else if(info.type == PERFECT_MISS)
 		{
+			// absolutely no data in filebuffer list
 			int p,start;
 			char *tempbuf,*totalbuf;
 			int refinedOffset = offset % MAX_CHUNK_SIZE;
@@ -809,7 +867,7 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 			}
 			else
 			{
-				// we need two chunks
+				// we need two chunks, because it is not aligned
 				start = offset - p;
 				refinedOffset = offset % MAX_CHUNK_SIZE;
 				
@@ -819,7 +877,7 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 				
 				pread(fi->fh,tempbuf,size*2,start);
 				
-				// add to buffers
+				// add two parts to filebuffer
 				addFileBuffer(tempbuf,start,start+size,fi->fh);
 				addFileBuffer(tempbuf+size,start+size,start+size+size,fi->fh);								
 				
@@ -836,18 +894,22 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
     
     retstat = pread(fi->fh, buf, size, offset);
     
-    // sbh encryption    
+    // sbh decryption    
 cache_read_process_done:
     len = retstat;
-    loadPolicyFromFile();
     
-    for(i=0;i<len;i++)
-	{
-		buf[i] = applyBitshift(buf[i],-1,forShift,CHAR_BIT);
-	}
-    for(i=0;i<len;i++)
+    if(encryptEnabled == 1)
     {
-		buf[i] = buf[i] - forAddition;
+		for(i=0;i<len;i++)
+		{
+			// bitshift
+			buf[i] = applyBitshift(buf[i],-1,forShift,CHAR_BIT);
+		}
+		for(i=0;i<len;i++)
+		{
+			// addition
+			buf[i] = buf[i] - forAddition;
+		}
 	}
 	
     if (retstat < 0)
@@ -880,19 +942,25 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset,
     log_fi(fi);
     
     // sbh encryption    
-    len = strlen(buf);
+    len = size;
     loadPolicyFromFile();
-    intermediateBuf = (char*)malloc(sizeof(char)*len);
+    // intermediateBuf is needed, because we can't modify the const pointer
+    intermediateBuf = (char*)calloc(size+1,sizeof(char));
     
-    strncpy(intermediateBuf,buf,len);
+    strncpy(intermediateBuf,buf,size);
     
-    for(i=0;i<len;i++)
-    {
-		intermediateBuf[i] = intermediateBuf[i] + forAddition;
-	}
-	for(i=0;i<len;i++)
-	{
-		intermediateBuf[i] = applyBitshift(intermediateBuf[i],1,forShift,CHAR_BIT);
+    if(encryptEnabled == 1)
+    {    
+		for(i=0;i<len;i++)
+		{
+			// addition
+			intermediateBuf[i] = intermediateBuf[i] + forAddition;
+		}
+		for(i=0;i<len;i++)
+		{
+			// bitshift
+			intermediateBuf[i] = applyBitshift(intermediateBuf[i],1,forShift,CHAR_BIT);
+		}
 	}
 	
 	if(cachePolicy != 0 && size == MAX_CHUNK_SIZE)
@@ -905,8 +973,9 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset,
 		if(info.type == PERFECT_HIT)
 		{
 			log_msg("bb_write_cache : PERFECT_HIT -> from %d to %d\n",info.firstpart->from,info.firstpart->to);
+			// write it to file buffer
 			memcpy(info.firstpart->buf,intermediateBuf,size);
-			info.firstpart->dirty = 1;
+			info.firstpart->dirty = 1; // set dirty flag
 			
 			retstat = size;
 			goto cache_write_process_done;
@@ -921,8 +990,10 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset,
 			// concatenation.
 			sprintf(totalbuf,"%s%s",info.firstpart->buf,info.secondpart->buf);
 			
+			// write it to intermediate buffer
 			memcpy(totalbuf+refinedOffset,intermediateBuf,size);
 			
+			// then write it to file buffer
 			memcpy(info.firstpart->buf,totalbuf,size);
 			memcpy(info.secondpart->buf,totalbuf+MAX_CHUNK_SIZE,size);
 			
@@ -954,6 +1025,7 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset,
 				
 				sprintf(totalbuf,"%s%s",info.firstpart->buf,tempbuf);
 				
+				// write data to intermediate buffer
 				memcpy(totalbuf+refinedOffset,intermediateBuf,size);
 				
 				// firstpart write
@@ -1017,8 +1089,11 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset,
 				start = offset;
 				log_msg("bb_write_cache : PERFECT_MISS(perfect align) -> from %d to %d\n",start,start+size);
 				tempbuf = (char*)calloc(size,sizeof(char));
+				
+				// read proper part to buffer for writing
 				pread(fi->fh,tempbuf,size,start);
 				
+				// copy it to intermediate buffer
 				memcpy(tempbuf,intermediateBuf,size);
 				
 				// add it to buffer
@@ -1040,11 +1115,12 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset,
 				log_msg("bb_write_cache : PERFECT_MISS(partial align) -> from %d to %d\n",refinedOffset,refinedOffset+size);
 				tempbuf = (char*)calloc(2*size,sizeof(char));
 				
+				// read proper part to buffer for writing
 				pread(fi->fh,tempbuf,size*2,start);
 				
 				memcpy(tempbuf+refinedOffset,intermediateBuf,size);
 				
-				// insert two
+				// insert two parts to file buffer
 				addFileBuffer(tempbuf,start,start+size,fi->fh);
 				addFileBuffer(tempbuf+size,start+size,start+size+size,fi->fh);
 				
@@ -1146,7 +1222,7 @@ int bb_flush(const char *path, struct fuse_file_info *fi)
 int bb_release(const char *path, struct fuse_file_info *fi)
 {
     int retstat = 0;
-    //sbh
+    //sbh : if file is closing, release file buffer list
     releaseFileBuffer(fi);
     
     log_msg("\nbb_release(path=\"%s\", fi=0x%08x)\n",
@@ -1653,6 +1729,7 @@ int main(int argc, char *argv[])
     //loadPolicyFromFile();
     // sbh: initialize the bufferlist
     INIT_LIST_HEAD(&headptr);
+    // set path of config file.
     getcwd(configFilePath,BUFSIZ);
     sprintf(configFilePath,"%s/%s",configFilePath,"ee516.conf");
     printf("%s\n",configFilePath);
