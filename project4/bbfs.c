@@ -65,6 +65,14 @@ char configFilePath[BUFSIZ];
 #define PARTIAL_MISS	0x103
 #define PERFECT_MISS	0x104
 
+static int bufferCount = 0; // filebuffer size
+
+static int accessCount = 0;
+static int hitCount = 0;
+static int missCount = 0;
+
+static struct list_head headptr; // filebuffer head pointer
+
 // represent filebuffer node
 struct filebuffer
 {
@@ -85,10 +93,6 @@ struct hitinfo
 	struct filebuffer *secondpart; // cached data
 };
 
-static int bufferCount = 0; // filebuffer size
-
-static struct list_head headptr; // filebuffer head pointer
-
 struct hitinfo bufferHitCheck(int offset, int reqSize, int fd)
 {
 	/*
@@ -108,6 +112,7 @@ struct hitinfo bufferHitCheck(int offset, int reqSize, int fd)
 	targetto = offset+reqSize;
 	log_msg("bufferHitCheck start : from %d to %d\n",targetfrom,targetto);
 	
+	accessCount++;
 	
 	list_for_each_entry(pos,&headptr,listptr)
 	{
@@ -141,11 +146,13 @@ struct hitinfo bufferHitCheck(int offset, int reqSize, int fd)
 	}
 	if(ret.type == PERFECT_HIT)
 	{
+		hitCount++;
 		list_move(&(ret.firstpart->listptr),&headptr); // for LRU, move target filebuffer to front
 		goto search_done;
 	}
 	if(ret.valid[0] == 1 && ret.valid[1] == 1)
 	{
+		hitCount++;
 		ret.type = PARTIAL_HIT; // this is that write or read request is spread between two filebuffers.
 		list_move(&(ret.secondpart->listptr),&headptr); // for LRU
 		list_move(&(ret.firstpart->listptr),&headptr);
@@ -153,6 +160,7 @@ struct hitinfo bufferHitCheck(int offset, int reqSize, int fd)
 	}
 	if(ret.valid[0] == 1 || ret.valid[1] == 1)
 	{
+		missCount++;
 		// this is routine for PARTIAL_MISS
 		// which means that incomplete data of request is existed in filebuffer
 		if(ret.valid[0] == 1)
@@ -165,6 +173,10 @@ struct hitinfo bufferHitCheck(int offset, int reqSize, int fd)
 		}
 		ret.type = PARTIAL_MISS;
 		goto search_done;
+	}
+	if(ret.type == PERFECT_MISS)
+	{
+		missCount++;
 	}
 search_done:
 	return ret;
@@ -210,6 +222,8 @@ void releaseFileBuffer(struct fuse_file_info *fi)
 		list_del(&(pos->listptr));
 		free(pos);
 	}
+	log_msg("accessCount : %d, hitCount : %d, missCount : %d, hitrate : %.4lf, missrate : %.4lf\n",accessCount,hitCount,missCount,1.0*hitCount/accessCount,1.0*missCount/accessCount);
+	accessCount = hitCount = missCount = 0;
 	bufferCount = 0;
 	INIT_LIST_HEAD(&headptr);
 	/*struct filebuffer *pos;
