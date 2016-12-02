@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <queue>
+//#include <queue>
 
-using namespace std;
+//using namespace std;
 
 // colors
 #define BLACK 0x106
@@ -20,7 +20,7 @@ struct rbtnode // represent redblack tree
 	struct rbtnode *right; // right child
 	struct rbtnode *left; // left child
 	int pid; // pid
-	int value; // value (virtual execution time)
+	int value; // value (virtual run time)
 	int color; // color
 	int type; // type
 };
@@ -30,7 +30,7 @@ struct rbtnode *root; // tree's root
 // prototypes
 struct rbtnode* insertNode(int v, int pid); // insertNode. it uses the scheme that original binary search tree
 void verifyInsertion(struct rbtnode *target); // verify the inserted node, tree structure is modified if necessary to preserve feature of redblack tree.
-struct rbtnode* leftmostNode(struct rbtnode *target); // get LeftMostNode, min virtual execution time in tree
+struct rbtnode* leftmostNode(struct rbtnode *target); // get LeftMostNode, min virtual run time in tree
 void deleteNode(struct rbtnode *target); // delete target node with preserving feature of redblack tree
 
 struct rbtnode* grandparent(struct rbtnode* n); // retrieve the grandparent of node n
@@ -55,13 +55,13 @@ void delete_case6(struct rbtnode *n);
 
 void printTree(struct rbtnode *current); // this function used for printing tree structure.
 
-void printTree(struct rbtnode *current)
+/*void printTree(struct rbtnode *current)
 {
-	/*
-	it is only for debug purpose
-	this function uses STL queue which requires g++ compilation
 	
-	if node's level is same, print it at same line.*/
+	//it is only for debug purpose
+	//this function uses STL queue which requires g++ compilation
+	
+	//if node's level is same, print it at same line.
 	queue<pair<struct rbtnode*,int> > ret;
 	int line = 0;
 
@@ -96,7 +96,7 @@ void printTree(struct rbtnode *current)
 		}
 	}
 	printf("\n");
-}
+}*/
 
 struct rbtnode* grandparent(struct rbtnode* n)
 {
@@ -222,7 +222,7 @@ struct rbtnode* insertNode(int v,int pid)
 	struct rbtnode *ret;
 	struct rbtnode *parent;
 	/*
-	Insert node with virtual execution time and pid*/
+	Insert node with virtual run time and pid*/
 
 	if (root == NULL)
 	{
@@ -317,13 +317,12 @@ void verifyInsertion(struct rbtnode *target)
 		{
 			g = grandparent(target);
 
-			if ((target == target->parent->right)&& (target->parent == g->left))
+			if ((target == target->parent->right) && (target->parent == g->left))
 			{
 				rotateLeft(target->parent);
 				target = target->left;
 			}
-			else if ((target == target->parent->left)
-				&& (target->parent == g->right))
+			else if ((target == target->parent->left) && (target->parent == g->right))
 			{
 				rotateRight(target->parent);
 				target = target->right;
@@ -530,7 +529,7 @@ void deleteNode(struct rbtnode *target)
 		int v, pid;
 		deleteTarget = getMaximum(target->left); // find predecessor in the left subtree.
 		
-		// exchange the value of target and deleteTarget (pid and value(execution time))
+		// exchange the value of target and deleteTarget (pid and value(run time))
 		v = deleteTarget->value;
 		pid = deleteTarget->pid;
 		deleteTarget->value = target->value;
@@ -598,22 +597,22 @@ int main()
 	int i;
 	int vrt[PID_LEN] = { 27, 19, 34, 65, 37, 7, 49, 2, 98 };
 
-	// insert virtual execution time and pid to the redblack tree
+	// insert virtual run time and pid to the redblack tree
 	for (i = 0; i < PID_LEN; i++)
 	{
 		verifyInsertion(insertNode(vrt[i], i));
 		
 	}
-	printTree(root);
+	//printTree(root);
 	while (!isEmpty())
 	{
 		// find the leftmostNode and print it and delete that node while tree is not empty
 		p = leftmostNode(root);
 
-		printf("PID : %d, Virtual Time : %d\n", p->pid,p->value);
+		printf("PID : %d, Virtual Run Time : %d\n", p->pid,p->value);
 
 		deleteNode(p);
-		printTree(root);
+		//printTree(root);
 	}
 
 
