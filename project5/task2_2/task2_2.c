@@ -35,6 +35,7 @@ static void init_gpios(void)
 {
 	int ret = 0,i,target;
 	
+	// init gpios, in this task button_gpio will not be initialized.
 	for(i=0;i<NUM_LED;i++)
 	{
 		target = LED0_GPIO + i;
@@ -51,14 +52,18 @@ static void init_gpios(void)
 
 void timer_timeout(unsigned long ptr)
 {
-	int i,cur,target;
-	
+	/*
+	 * timer_timeout function : handler of kernel timer which is expired
+	 * Each led posseses the timer with different period*/
+	int cur,target;
 	
 	if(0<= ptr && ptr < 4)
 	{
+		// retrieve current state of expired timer's LED
 		cur = gpio_get_value(LED0_GPIO+ptr);
 		target = LED0_GPIO + ptr;
 		
+		// fliping LED state
 		if(cur==0)
 		{
 			gpio_set_value(target,1);
@@ -67,6 +72,7 @@ void timer_timeout(unsigned long ptr)
 		{
 			gpio_set_value(target,0);
 		}
+		// register current timer again, period : LED number * 100 ms
 		timerFactor[ptr].expires = get_jiffies_64() + (ptr+1)*HZ / 10;
 	
 		add_timer(&timerFactor[ptr]);
@@ -79,8 +85,10 @@ static void start_timer(void)
 	
 	for(i=0;i<NUM_LED;i++)
 	{
+		// initialize timers, each timer will be possesed by each led
 		init_timer(&timerFactor[i]);
 		timerFactor[i].function = timer_timeout;
+		// period : LED number * 100 ms
 		timerFactor[i].expires = get_jiffies_64() + (i+1)*HZ / 10;
 		timerFactor[i].data = i;
 		add_timer(&timerFactor[i]);
@@ -91,6 +99,7 @@ static void stop_timer(void)
 {
 	int i;
 	
+	// delete timers
 	for(i=0;i<NUM_LED;i++)
 	{
 		del_timer(&timerFactor[i]);
@@ -101,6 +110,7 @@ static void free_gpios(void)
 {
 	int target,i;
 	
+	// release gpios
 	for(i=0;i<NUM_LED;i++)
 	{
 		target = LED0_GPIO + i;
@@ -110,7 +120,7 @@ static void free_gpios(void)
 
 static int __init bb_module_init(void)
 {	
-	printk("[EE516] Initializing BB module completed.\n");
+	printk("[EE516] Initializing task2_2 completed.\n");
 	init_gpios();
 	start_timer();
 	return 0;
@@ -118,7 +128,7 @@ static int __init bb_module_init(void)
 
 static void __exit bb_module_exit(void)
 {		
-	printk("[EE516] BB module exit.\n");
+	printk("[EE516] BB task2_2 exit.\n");
 	stop_timer();
 	free_gpios();
 }

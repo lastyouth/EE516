@@ -51,8 +51,9 @@ struct sll
 struct sll *head;
 unsigned int size;
 
-static void printSll(void)
+/*static void printSll(void)
 {
+	// print linkedlist, purpose of debugging
 	int i;
 	struct sll *cur;
 	
@@ -64,7 +65,7 @@ static void printSll(void)
 		printk("%d node : %d\n",i,cur->v);
 		cur = cur->next;
 	}
-}
+}*/
 
 // functions for linkedlist
 static void allocLinkedListRandomly(int v)
@@ -111,7 +112,6 @@ static void allocLinkedListRandomly(int v)
 		}
 	}
 	size++;
-	//printSll();
 	// release lock
 	up(&sem);
 }
@@ -132,6 +132,7 @@ static int getFirstMatchedSllNodeWithDeleteOperation(int v)
 			ret = v;
 			matched = 1;
 			
+			// delete head
 			temp = head;
 			head = head->next;
 			
@@ -155,6 +156,7 @@ static int getFirstMatchedSllNodeWithDeleteOperation(int v)
 			}
 			if(matched == 1)
 			{
+				// delete matched node
 				temp = cur->next;
 				cur->next = cur->next->next; // concatenate prev and next node of target node.
 				
@@ -163,17 +165,28 @@ static int getFirstMatchedSllNodeWithDeleteOperation(int v)
 			}
 		}
 	}
-	/*if(matched == 1)
-	{
-		printSll();
-	}
-	else
-	{
-		printk("Match failed\n");
-	}*/
 	// release lock
 	up(&sem);
 	return ret;
+}
+
+// release nodes
+static void releaseSll(void)
+{
+	int i;
+	struct sll *curptr, *nextptr;
+	
+	down(&sem);
+	curptr = head;
+	for(i=0;i<size;i++)
+	{
+		nextptr = curptr->next;
+		kfree(curptr);
+		curptr = nextptr;
+	}
+	size = 0;
+	head = NULL;
+	up(&sem);
 }
 
 static int __init dummy_init(void)
@@ -228,14 +241,18 @@ ssize_t dummy_read(struct file *file, char *buffer, size_t length, loff_t *offse
 	
 	if(length > 1)
 	{
+		// request from user
 		v = buffer[0];
 		
+		// search target value from linkedlist
 		ret = getFirstMatchedSllNodeWithDeleteOperation(v);
 		
+		// Fail to find
 		if(ret == -1)
 		{
 			return 0;
 		}
+		// succeed to find
 		buffer[1] = ret;
 		return 1;		
 	}
@@ -248,10 +265,12 @@ ssize_t dummy_write(struct file *file, const char *buffer, size_t length, loff_t
 	
 	if(length > 0)
 	{
+		// request from user
 		v = buffer[0];
 		
 		if(0<= v && v <=9)
 		{
+			// insert the value from the user in random position
 			allocLinkedListRandomly(v);
 			return 1;
 		}
@@ -272,7 +291,8 @@ int dummy_open(struct inode *inode, struct file *file)
 int dummy_release(struct inode *inode, struct file *file)
 {
 	printk("Dummy Driver : Release Call\n");
-	printSll();
+	//printSll();
+	releaseSll();
 	return 0;
 }
 

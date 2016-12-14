@@ -24,6 +24,8 @@ clean:
 	rm -rf .tmp_versions .*.cmd
 	rm -f .*.cmdModule
 	rm -f modules.order Module.symvers 
+#	rm -f reader_writer_skel
 
 $(MODULES:%=%.ko):*c
 	$(MAKE) CROSS_COMPILE=$(CROSS_COMPILE) ARCH=$(ARCH) -C $(KERNEL_SOURCE) SUBDIRS=$(CURDIR) M=$(CURDIR) modules
+#	gcc -o reader_writer_skel reader_writer_skel.c -lpthread -lrt

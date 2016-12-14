@@ -11,7 +11,10 @@
 #define NUMWRITE 10			// Number of Writers
 
 #define DEVICE_NAME "/dev/JUSTICERAINSFROM"
-#define NUMLOOP 100
+#define NUMLOOP 100 // max loop count
+
+// WARNING : THIS CODE SHOULD BE COMPILED BY THIS COMMAND.
+// gcc -o reader_writer_skel reader_writer_skel.c -lpthread -lrt
 
 int targetFd;
 
@@ -40,10 +43,11 @@ void *write_func(void *arg) {
 	int i,ret,id = *((int*)arg);
 	char buf[4];
 
-	
 	for(i=0;i<NUMLOOP;i++)
 	{
+		// get random number (0 ~ 9)
 		buf[0] = (char)getNanoTimeRandomNumber(10);
+		// pass to the driver.
 		ret = write(targetFd,buf,4);
 		
 		if(ret == 0)
@@ -64,15 +68,20 @@ void *read_func(void *arg) {
 	
 	for(i=0;i<NUMLOOP;i++)
 	{
+		// write random number to buf[0]
 		buf[0] = (char)getNanoTimeRandomNumber(10);
+		
+		// attempt to read
 		ret = read(targetFd,buf,4);
 		
 		if(ret == 0)
 		{
+			// there is no node which value is buf[0]
 			printf("READER(%d) : Attempt to read %d, but failed\n",id,(int)buf[0]);
 		}
 		else
 		{
+			// Target node is acquired from driver. Value is saved in buf[1]
 			printf("READER(%d) : Attempt to read %d and succeeded\n",id, (int)buf[1]);
 		}
 	}
@@ -81,11 +90,11 @@ void *read_func(void *arg) {
 int main(void)
 {
 	int i;
-	pthread_t read_thread[NUMREAD];
-	pthread_t write_thread[NUMWRITE];
+	pthread_t read_thread[NUMREAD]; // readers
+	pthread_t write_thread[NUMWRITE]; // writers
 	int id[] = {1,2,3,4,5,6,7,8,9,10};
 	
-	targetFd = open(DEVICE_NAME,O_RDWR);
+	targetFd = open(DEVICE_NAME,O_RDWR); // open device driver
 	
 	if(targetFd == -1)
 	{
@@ -93,15 +102,18 @@ int main(void)
 		return -1;
 	}
 
+	// create reader threads
 	for(i=0;i<NUMREAD;i++)
 	{
 		pthread_create(&read_thread[i], NULL, read_func,(void*)(&id[i]));	
 	}
+	// create writer threads
 	for(i=0;i<NUMWRITE;i++)
 	{
 		pthread_create(&write_thread[i], NULL, write_func,(void*)(&id[i]));	
 	}
 	
+	// wait for threads
 	for(i=0;i<NUMREAD;i++)
 	{
 		pthread_join(read_thread[i], NULL);

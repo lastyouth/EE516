@@ -33,6 +33,7 @@ static void init_gpios(void)
 {
 	int ret = 0,i,target;
 	
+	// init gpios, in this task button_gpio will not be initialized.
 	for(i=0;i<NUM_LED;i++)
 	{
 		target = LED0_GPIO + i;
@@ -49,6 +50,7 @@ static void init_gpios(void)
 
 static void turnOnLEDs(void)
 {
+	// turn all LEDs on.
 	int i,target;
 	
 	for(i=0;i<NUM_LED;i++)
@@ -61,6 +63,7 @@ static void turnOnLEDs(void)
 
 static void turnOffLEDS(void)
 {
+	// turn all LEDs off.
 	int i,target;
 	
 	for(i=0;i<NUM_LED;i++)
@@ -73,6 +76,7 @@ static void turnOffLEDS(void)
 
 static void free_gpios(void)
 {
+	// release LEDS gpios
 	int target,i;
 	
 	for(i=0;i<NUM_LED;i++)
@@ -84,7 +88,8 @@ static void free_gpios(void)
 
 static int __init bb_module_init(void)
 {	
-	printk("[EE516] Initializing BB module completed.\n");
+	printk("[EE516] Initializing task2_1 completed.\n");
+	// init gpios, then turnOnLEDs
 	init_gpios();
 	turnOnLEDs();
 	return 0;
@@ -92,7 +97,9 @@ static int __init bb_module_init(void)
 
 static void __exit bb_module_exit(void)
 {		
-	printk("[EE516] BB module exit.\n");
+	printk("[EE516] task2_1 exit.\n");
+	
+	// turn off led, then release gpios
 	turnOffLEDS();
 	free_gpios();
 }

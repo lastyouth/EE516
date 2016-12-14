@@ -66,6 +66,7 @@ static void init_gpios(void)
 {
 	int ret = 0,i,target;
 	
+	// init gpios, including button_gpio.
 	for(i=0;i<NUM_LED;i++)
 	{
 		target = LED0_GPIO + i;
@@ -77,8 +78,17 @@ static void init_gpios(void)
 		}
 		gpio_direction_output(target,0);
 	}
+	ret = gpio_request(BUTTON_GPIO,"BUTTON");
+	if(ret < 0)
+	{
+		printk("Button gpio gpio_init failure\n");
+	}
 	buttonIRQ = gpio_to_irq(BUTTON_GPIO);
+	gpio_direction_input(BUTTON_GPIO);
 	
+	// additionally, in task2_3, button should be activated. So acquire the irq number from gpio then register irq handler with FALLING and RISING edge
+	// Actually, in this task, Detecting RISING edge is not necessary, but before going task2_4, we should verify the operation of irq_handler.
+	// Hence, we just leaved it.
 	ret = request_irq(buttonIRQ,(irq_handler_t)button_isr,IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,"EE516_TEAM1",NULL);
 	
 	if(ret < 0)
@@ -89,14 +99,19 @@ static void init_gpios(void)
 
 void timer_timeout(unsigned long ptr)
 {
-	int i,cur,target;
+	int cur,target;
 	
+	/*
+	 * timer_timeout function : handler of kernel timer which is expired
+	 * Each led posseses the timer with different period*/
 	
 	if(0<= ptr && ptr < 4)
 	{
+		// retrieve current state of expired timer's LED
 		cur = gpio_get_value(LED0_GPIO+ptr);
 		target = LED0_GPIO + ptr;
 		
+		// fliping LED state
 		if(cur==0)
 		{
 			gpio_set_value(target,1);
@@ -105,6 +120,7 @@ void timer_timeout(unsigned long ptr)
 		{
 			gpio_set_value(target,0);
 		}
+		// register current timer again, period : LED number * 100 ms
 		timerFactor[ptr].expires = get_jiffies_64() + (ptr+1)*HZ / 10;
 	
 		add_timer(&timerFactor[ptr]);
@@ -117,8 +133,10 @@ static void start_timer(void)
 	
 	for(i=0;i<NUM_LED;i++)
 	{
+		// we use same pattern with task2_2.
 		init_timer(&timerFactor[i]);
 		timerFactor[i].function = timer_timeout;
+		// period : LED number * 100 ms
 		timerFactor[i].expires = get_jiffies_64() + (i+1)*HZ / 10;
 		timerFactor[i].data = i;
 		add_timer(&timerFactor[i]);
@@ -128,7 +146,7 @@ static void start_timer(void)
 static void stop_timer(void)
 {
 	int i;
-	
+	// delete timers
 	for(i=0;i<NUM_LED;i++)
 	{
 		gpio_set_value(LED0_GPIO+i,0);
@@ -140,17 +158,20 @@ static void free_gpios(void)
 {
 	int target,i;
 	
+	// release LED gpios and Button gpio
 	for(i=0;i<NUM_LED;i++)
 	{
 		target = LED0_GPIO + i;
 		gpio_free(target);
 	}
 	gpio_free(BUTTON_GPIO);
+	free_irq(buttonIRQ,NULL);
 }
 
 static int __init bb_module_init(void)
 {	
 	printk("[EE516] Initializing BB module completed.\n");
+	// invoke init_gpios
 	init_gpios();
 	return 0;
 }
@@ -158,9 +179,9 @@ static int __init bb_module_init(void)
 static void __exit bb_module_exit(void)
 {		
 	printk("[EE516] BB module exit.\n");
-	free_gpios();
+	// clean current operation.
 	stop_timer();
-	free_irq(buttonIRQ,NULL);
+	free_gpios();
 }
 
 
