@@ -96,20 +96,13 @@ static void allocLinkedListRandomly(int v)
 		{
 			cur = cur->next;
 		}
-		// if cur points tail, then just allocate
-		if(cur->next == NULL)
-		{
-			cur->next = (struct sll*)kzalloc(sizeof(struct sll),GFP_KERNEL);
-			cur->next->v = v;
-		}
-		else
-		{
-			// if cur is not tail, allocate and concatenate
-			temp = cur->next;
-			cur->next = (struct sll*)kzalloc(sizeof(struct sll),GFP_KERNEL);
-			cur->next->v = v;
-			cur->next->next = temp;
-		}
+
+		// allocate and concatenate
+		temp = cur->next;
+		cur->next = (struct sll*)kzalloc(sizeof(struct sll),GFP_KERNEL);
+		cur->next->v = v;
+		cur->next->next = temp;
+
 	}
 	size++;
 	// release lock
@@ -246,17 +239,12 @@ ssize_t dummy_read(struct file *file, char *buffer, size_t length, loff_t *offse
 		
 		// search target value from linkedlist
 		ret = getFirstMatchedSllNodeWithDeleteOperation(v);
+		printk("Dummy Driver : Read: linkedlist size=%d, read value=%d\n", size, v);
 		
-		// Fail to find
-		if(ret == -1)
-		{
-			return 0;
-		}
-		// succeed to find
 		buffer[1] = ret;
-		return 1;		
+		return ret;		
 	}
-	return 0;
+	return -1;
 }
 
 ssize_t dummy_write(struct file *file, const char *buffer, size_t length, loff_t *offset)
@@ -272,14 +260,15 @@ ssize_t dummy_write(struct file *file, const char *buffer, size_t length, loff_t
 		{
 			// insert the value from the user in random position
 			allocLinkedListRandomly(v);
+			printk("Dummy Driver : Write: linkedlist size=%d, write value=%d\n", size, v);
 			return 1;
 		}
 		else
 		{
-			return 0;
+			return -1;
 		}
 	}
-	return 0;
+	return -1;
 }
 
 int dummy_open(struct inode *inode, struct file *file)

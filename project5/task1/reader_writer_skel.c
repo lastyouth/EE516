@@ -50,7 +50,7 @@ void *write_func(void *arg) {
 		// pass to the driver.
 		ret = write(targetFd,buf,4);
 		
-		if(ret == 0)
+		if(ret == -1)
 		{
 			printf("WRITER(%d) : write failed\n",id);
 		}
@@ -74,7 +74,7 @@ void *read_func(void *arg) {
 		// attempt to read
 		ret = read(targetFd,buf,4);
 		
-		if(ret == 0)
+		if(ret == -1)
 		{
 			// there is no node which value is buf[0]
 			printf("READER(%d) : Attempt to read %d, but failed\n",id,(int)buf[0]);
@@ -92,7 +92,7 @@ int main(void)
 	int i;
 	pthread_t read_thread[NUMREAD]; // readers
 	pthread_t write_thread[NUMWRITE]; // writers
-	int id[] = {1,2,3,4,5,6,7,8,9,10};
+	int *id;
 	
 	targetFd = open(DEVICE_NAME,O_RDWR); // open device driver
 	
@@ -101,15 +101,22 @@ int main(void)
 		printf("Cannot find targetmodule : %s\n",DEVICE_NAME);
 		return -1;
 	}
+	
+	if (NUMREAD > NUMWRITE)
+		id = (int *)malloc(sizeof(int)*NUMREAD);
+	else
+		id = (int *)malloc(sizeof(int)*NUMWRITE);
 
 	// create reader threads
 	for(i=0;i<NUMREAD;i++)
 	{
+		id[i] = i+1;
 		pthread_create(&read_thread[i], NULL, read_func,(void*)(&id[i]));	
 	}
 	// create writer threads
 	for(i=0;i<NUMWRITE;i++)
 	{
+		id[i] = i+1;
 		pthread_create(&write_thread[i], NULL, write_func,(void*)(&id[i]));	
 	}
 	

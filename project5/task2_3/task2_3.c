@@ -75,6 +75,7 @@ static void init_gpios(void)
 		if(ret < 0)
 		{
 			printk("LED%d gpio_init failure\n",i);
+			continue;
 		}
 		gpio_direction_output(target,0);
 	}
@@ -83,12 +84,13 @@ static void init_gpios(void)
 	{
 		printk("Button gpio gpio_init failure\n");
 	}
-	buttonIRQ = gpio_to_irq(BUTTON_GPIO);
+
 	gpio_direction_input(BUTTON_GPIO);
 	
 	// additionally, in task2_3, button should be activated. So acquire the irq number from gpio then register irq handler with FALLING and RISING edge
 	// Actually, in this task, Detecting RISING edge is not necessary, but before going task2_4, we should verify the operation of irq_handler.
 	// Hence, we just leaved it.
+	buttonIRQ = gpio_to_irq(BUTTON_GPIO);
 	ret = request_irq(buttonIRQ,(irq_handler_t)button_isr,IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,"EE516_TEAM1",NULL);
 	
 	if(ret < 0)
@@ -149,8 +151,8 @@ static void stop_timer(void)
 	// delete timers
 	for(i=0;i<NUM_LED;i++)
 	{
-		gpio_set_value(LED0_GPIO+i,0);
 		del_timer(&timerFactor[i]);
+		gpio_set_value(LED0_GPIO+i,0);
 	}
 }
 

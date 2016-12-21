@@ -39,11 +39,16 @@ static void init_gpios(void)
 	for(i=0;i<NUM_LED;i++)
 	{
 		target = LED0_GPIO + i;
+		if(!gpio_is_valid(target)){
+			printk("invalid gpio number\n");
+			return;
+		}
 		ret = gpio_request(target,"LED");
 	
 		if(ret < 0)
 		{
 			printk("LED%d gpio_init failure\n",i);
+			continue;
 		}
 		gpio_direction_output(target,0);
 	}
@@ -103,6 +108,7 @@ static void stop_timer(void)
 	for(i=0;i<NUM_LED;i++)
 	{
 		del_timer(&timerFactor[i]);
+		gpio_set_value(LED0_GPIO+i,0);
 	}
 }
 

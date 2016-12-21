@@ -69,7 +69,7 @@ static irq_handler_t button_isr(unsigned int irq, void *dev_id, struct pt_regs *
 			// duration is under the 1000ms
 			counter++;
 			// because there are 4 leds in bbb, it can't represent the value above 16. So revert it to zero
-			if(counter == 16)
+			if(counter == INT_MAX)
 			{
 				counter = 0;
 			}
@@ -77,8 +77,10 @@ static irq_handler_t button_isr(unsigned int irq, void *dev_id, struct pt_regs *
 		else
 		{
 			// long click is detected. set counter variable to zero.
+			printk("long click! reset counter.\n");
 			counter = 0;
 		}
+		printk("counter : %d\n", counter);
 	}
 	
 	return (irq_handler_t)IRQ_HANDLED;
@@ -121,7 +123,7 @@ static void init_gpios(void)
 
 void timer_timeout(unsigned long ptr)
 {
-	int i,cur,j;
+	int i,cur;
 	
 	/*
 	 * timer expired handler for blinking leds by referring current counter value.
@@ -131,15 +133,15 @@ void timer_timeout(unsigned long ptr)
 	if(ptr == LIGHTDOWN)
 	{
 		// turn on the light by referring counter value. 
-		for(i=1,j=0;i<=8;i*=2,j++)
+		for(i=0;i<NUM_LED;i++)
 		{
 			// AND operation for extracting target bit is 1 or 0.
-			cur = counter&i;
+			cur = counter&(1<<i);
 			
 			if(cur != 0)
 			{
 				// target bit is 1.
-				gpio_set_value(LED0_GPIO+j,1);
+				gpio_set_value(LED0_GPIO+i,1);
 			}
 		}
 		// light up for 0.8 secs
@@ -192,8 +194,8 @@ static void free_gpios(void)
 		target = LED0_GPIO + i;
 		gpio_free(target);
 	}
-	gpio_free(BUTTON_GPIO);
 	free_irq(buttonIRQ,NULL);
+	gpio_free(BUTTON_GPIO);
 }
 
 static int __init bb_module_init(void)
